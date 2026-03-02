@@ -210,14 +210,12 @@ export function getExpenseColumns(
     {
       id: "amount",
       accessorKey: "amount",
-      header: ({ column }) => (
-        <DataTableColumnHeader column={column} label="Amount" />
-      ),
+      header: ({ column }) => <DataTableColumnHeader column={column} label="Amount" />,
       cell: ({ row }) => {
         const amount = row.getValue<number>("amount")
         const currency = row.original.currency
         return (
-          <div className="text-right font-mono font-medium tabular-nums">
+          <div className="font-mono font-medium tabular-nums">
             {amount.toLocaleString("en-US", {
               style: "currency",
               currency: currency || "USD",
