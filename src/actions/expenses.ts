@@ -7,51 +7,43 @@ import { expenseSchema } from "@/lib/validators"
 import { eq, desc, and, sql, gte, lte } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 
-export async function getExpenses(filters?: {
-  search?: string
-  categoryId?: string
-  status?: string
-  startDate?: string
-  endDate?: string
-}) {
+export type ExpenseRow = {
+  id: string
+  title: string
+  amount: number
+  currency: string
+  date: string
+  status: string
+  notes: string | null
+  categoryId: string | null
+  categoryName: string | null
+  categoryColor: string | null
+  createdAt: Date
+}
+
+export async function getExpenses() {
   const session = await requireSession()
 
-  const conditions = [eq(expenses.userId, session.user.id)]
-
-  if (filters?.categoryId) {
-    conditions.push(eq(expenses.categoryId, filters.categoryId))
-  }
-  if (filters?.status) {
-    conditions.push(eq(expenses.status, filters.status))
-  }
-  if (filters?.startDate) {
-    conditions.push(gte(expenses.date, filters.startDate))
-  }
-  if (filters?.endDate) {
-    conditions.push(lte(expenses.date, filters.endDate))
-  }
-
-  const result = await db
+  const rows = await db
     .select({
-      expense: expenses,
+      id: expenses.id,
+      title: expenses.title,
+      amount: sql<number>`${expenses.amount}::numeric`,
+      currency: expenses.currency,
+      date: expenses.date,
+      status: expenses.status,
+      notes: expenses.notes,
+      categoryId: expenses.categoryId,
       categoryName: categories.name,
       categoryColor: categories.color,
+      createdAt: expenses.createdAt,
     })
     .from(expenses)
     .leftJoin(categories, eq(expenses.categoryId, categories.id))
-    .where(and(...conditions))
+    .where(eq(expenses.userId, session.user.id))
     .orderBy(desc(expenses.date), desc(expenses.createdAt))
 
-  if (filters?.search) {
-    const search = filters.search.toLowerCase()
-    return result.filter(
-      (r) =>
-        r.expense.title.toLowerCase().includes(search) ||
-        r.expense.notes?.toLowerCase().includes(search)
-    )
-  }
-
-  return result
+  return { data: rows as ExpenseRow[] }
 }
 
 export async function getExpenseById(id: string) {

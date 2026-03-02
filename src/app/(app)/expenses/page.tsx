@@ -4,28 +4,21 @@ import { Plus } from "lucide-react"
 import Link from "next/link"
 import { getExpenses } from "@/actions/expenses"
 import { getCategories, seedDefaultCategories } from "@/actions/categories"
-import { ExpenseList } from "@/components/expenses/expense-list"
-import { ExpenseFilters } from "@/components/expenses/expense-filters"
+import { ExpensesDataTable } from "@/components/expenses/expenses-data-table"
+import type { Option } from "@/types/data-table"
 
-export default async function ExpensesPage({
-  searchParams,
-}: {
-  searchParams: Promise<{
-    search?: string
-    status?: string
-    category?: string
-  }>
-}) {
-  const params = await searchParams
+export default async function ExpensesPage() {
   await seedDefaultCategories()
-  const [expenses, categories] = await Promise.all([
-    getExpenses({
-      search: params.search,
-      status: params.status,
-      categoryId: params.category,
-    }),
+
+  const [{ data }, categories] = await Promise.all([
+    getExpenses(),
     getCategories(),
   ])
+
+  const categoryOptions: Option[] = categories.map((cat) => ({
+    label: cat.name,
+    value: cat.id,
+  }))
 
   return (
     <>
@@ -37,11 +30,11 @@ export default async function ExpensesPage({
           </Link>
         </Button>
       </AppHeader>
-      <div className="flex-1">
-        <div className="border-b px-4 py-3">
-          <ExpenseFilters categories={categories} />
-        </div>
-        <ExpenseList expenses={expenses} />
+      <div className="flex-1 overflow-auto">
+        <ExpensesDataTable
+          data={data}
+          categoryOptions={categoryOptions}
+        />
       </div>
     </>
   )
