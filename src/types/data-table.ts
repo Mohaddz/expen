@@ -32,6 +32,7 @@ export interface Option {
   label: string;
   value: string;
   count?: number;
+  color?: string;
   icon?: React.FC<React.SVGProps<SVGSVGElement>>;
 }
 

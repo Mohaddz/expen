@@ -1,22 +1,26 @@
 "use client"
 
-import type { ColumnDef, Table } from "@tanstack/react-table"
-import { format } from "date-fns"
+import type { ColumnDef } from "@tanstack/react-table"
+import { format, differenceInDays } from "date-fns"
 import {
   CalendarIcon,
   CircleDollarSign,
   FileText,
   MoreHorizontal,
-  Pencil,
+  Pause,
+  Play,
   Tag,
   Trash2,
 } from "lucide-react"
-import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 
-import { deleteExpense, updateExpenseField } from "@/actions/expenses"
-import type { ExpenseRow } from "@/actions/expenses"
+import {
+  deleteSubscription,
+  toggleSubscription,
+  updateSubscriptionField,
+} from "@/actions/subscriptions"
+import type { SubscriptionRow } from "@/actions/subscriptions"
 import { DataTableColumnHeader } from "@/components/data-table/data-table-column-header"
 import { EditableCell } from "@/components/data-table/editable-cell"
 import { Badge } from "@/components/ui/badge"
@@ -30,19 +34,13 @@ import {
 } from "@/components/ui/dropdown-menu"
 import type { Option } from "@/types/data-table"
 
-const STATUS_STYLES: Record<string, string> = {
-  pending: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
-  paid: "bg-green-500/10 text-green-500 border-green-500/20",
-  overdue: "bg-red-500/10 text-red-500 border-red-500/20",
-}
-
-const STATUS_OPTIONS: Option[] = [
-  { label: "Pending", value: "pending" },
-  { label: "Paid", value: "paid" },
-  { label: "Overdue", value: "overdue" },
+const FREQUENCY_OPTIONS: Option[] = [
+  { label: "Weekly", value: "weekly" },
+  { label: "Monthly", value: "monthly" },
+  { label: "Yearly", value: "yearly" },
 ]
 
-function ExpenseRowActions({ expense }: { expense: ExpenseRow }) {
+function SubscriptionRowActions({ subscription }: { subscription: SubscriptionRow }) {
   const router = useRouter()
 
   return (
@@ -54,21 +52,40 @@ function ExpenseRowActions({ expense }: { expense: ExpenseRow }) {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem asChild>
-          <Link href={`/expenses/${expense.id}`}>
-            <Pencil className="mr-2 h-4 w-4" />
-            Edit
-          </Link>
+        <DropdownMenuItem
+          onClick={async () => {
+            try {
+              await toggleSubscription(subscription.id)
+              toast.success(
+                subscription.active ? "Subscription paused" : "Subscription resumed"
+              )
+              router.refresh()
+            } catch {
+              toast.error("Failed to update")
+            }
+          }}
+        >
+          {subscription.active ? (
+            <>
+              <Pause className="mr-2 h-4 w-4" />
+              Pause
+            </>
+          ) : (
+            <>
+              <Play className="mr-2 h-4 w-4" />
+              Resume
+            </>
+          )}
         </DropdownMenuItem>
         <DropdownMenuItem
           className="text-destructive focus:text-destructive"
           onClick={async () => {
             try {
-              await deleteExpense(expense.id)
+              await deleteSubscription(subscription.id)
+              toast.success("Subscription deleted")
               router.refresh()
-              toast.success("Expense deleted")
             } catch {
-              toast.error("Failed to delete expense")
+              toast.error("Failed to delete")
             }
           }}
         >
@@ -80,18 +97,18 @@ function ExpenseRowActions({ expense }: { expense: ExpenseRow }) {
   )
 }
 
-async function handleExpenseSave(
+async function handleSubscriptionSave(
   id: string,
   field: string,
-  value: string | number | null
+  value: string | number | boolean | null
 ) {
-  await updateExpenseField(id, field, value)
+  await updateSubscriptionField(id, field, value)
 }
 
-export function getExpenseColumns(
+export function getSubscriptionColumns(
   categoryOptions: Option[],
   onOptimisticUpdate?: (id: string, field: string, value: string | number | null) => void,
-): ColumnDef<ExpenseRow>[] {
+): ColumnDef<SubscriptionRow>[] {
   return [
     {
       id: "select",
@@ -116,28 +133,37 @@ export function getExpenseColumns(
       enableHiding: false,
     },
     {
-      id: "title",
-      accessorKey: "title",
+      id: "name",
+      accessorKey: "name",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} label="Title" />
+        <DataTableColumnHeader column={column} label="Name" />
       ),
       cell: ({ row }) => (
         <EditableCell
-          value={row.getValue<string>("title")}
+          value={row.getValue<string>("name")}
           rowId={row.original.id}
-          field="title"
-          onSave={handleExpenseSave}
+          field="name"
+          onSave={handleSubscriptionSave}
           onOptimisticUpdate={onOptimisticUpdate}
           formatDisplay={(v) => (
-            <span className="block max-w-[300px] truncate font-medium">
-              {String(v)}
-            </span>
+            <div className="flex items-center gap-2">
+              <span
+                className={`block max-w-[300px] truncate font-medium ${!row.original.active ? "text-muted-foreground line-through" : ""}`}
+              >
+                {String(v)}
+              </span>
+              {!row.original.active && (
+                <Badge variant="secondary" className="text-[10px]">
+                  Paused
+                </Badge>
+              )}
+            </div>
           )}
         />
       ),
       meta: {
-        label: "Title",
-        placeholder: "Search titles...",
+        label: "Name",
+        placeholder: "Search names...",
         variant: "text",
         icon: FileText,
       },
@@ -158,7 +184,7 @@ export function getExpenseColumns(
             field="categoryId"
             type="select"
             options={categoryOptions}
-            onSave={handleExpenseSave}
+            onSave={handleSubscriptionSave}
             onOptimisticUpdate={onOptimisticUpdate}
             formatDisplay={(v) => {
               const opt = categoryOptions.find((o) => o.value === String(v))
@@ -191,86 +217,100 @@ export function getExpenseColumns(
       enableSorting: false,
     },
     {
-      id: "date",
-      accessorKey: "date",
+      id: "frequency",
+      accessorKey: "frequency",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} label="Date" />
+        <DataTableColumnHeader column={column} label="Frequency" />
       ),
       cell: ({ row }) => (
         <EditableCell
-          value={row.getValue<string>("date")}
+          value={row.getValue<string>("frequency")}
           rowId={row.original.id}
-          field="date"
-          type="date"
-          onSave={handleExpenseSave}
+          field="frequency"
+          type="select"
+          options={FREQUENCY_OPTIONS}
+          onSave={handleSubscriptionSave}
           onOptimisticUpdate={onOptimisticUpdate}
           formatDisplay={(v) => (
-            <span className="text-muted-foreground text-sm">
-              {format(new Date(String(v)), "MMM d, yyyy")}
-            </span>
+            <Badge variant="outline" className="text-[10px] capitalize">
+              {String(v)}
+            </Badge>
           )}
         />
       ),
-      meta: {
-        label: "Date",
-        variant: "date",
-        icon: CalendarIcon,
-      },
-    },
-    {
-      id: "status",
-      accessorKey: "status",
-      header: ({ column }) => (
-        <DataTableColumnHeader column={column} label="Status" />
-      ),
-      cell: ({ row }) => {
-        const status = row.getValue<string>("status")
-        return (
-          <EditableCell
-            value={status}
-            rowId={row.original.id}
-            field="status"
-            type="select"
-            options={STATUS_OPTIONS}
-            onSave={handleExpenseSave}
-            onOptimisticUpdate={onOptimisticUpdate}
-            formatDisplay={(v) => (
-              <Badge
-                variant="outline"
-                className={`capitalize ${STATUS_STYLES[String(v)] ?? ""}`}
-              >
-                {String(v)}
-              </Badge>
-            )}
-          />
-        )
-      },
       filterFn: (row, columnId, filterValue: string[]) => {
         if (!filterValue?.length) return true
         return filterValue.includes(row.getValue(columnId) as string)
       },
       meta: {
-        label: "Status",
+        label: "Frequency",
         variant: "multiSelect",
-        options: STATUS_OPTIONS,
+        options: FREQUENCY_OPTIONS,
         icon: Tag,
       },
       enableColumnFilter: true,
     },
     {
+      id: "nextDueDate",
+      accessorKey: "nextDueDate",
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} label="Next due" />
+      ),
+      cell: ({ row }) => {
+        const nextDueDate = row.getValue<string>("nextDueDate")
+        const daysUntilDue = differenceInDays(
+          new Date(nextDueDate),
+          new Date()
+        )
+        const isDueSoon = daysUntilDue <= 3 && daysUntilDue >= 0
+        const isActive = row.original.active
+
+        return (
+          <div className="flex items-center gap-2">
+            <span className="text-muted-foreground text-sm">
+              {format(new Date(nextDueDate), "MMM d, yyyy")}
+            </span>
+            {isDueSoon && isActive && (
+              <Badge
+                variant="outline"
+                className="text-[10px] bg-orange-500/10 text-orange-500 border-orange-500/20"
+              >
+                Due soon
+              </Badge>
+            )}
+          </div>
+        )
+      },
+      meta: {
+        label: "Next due",
+        variant: "date",
+        icon: CalendarIcon,
+      },
+    },
+    {
       id: "amount",
       accessorKey: "amount",
-      header: ({ column }) => <DataTableColumnHeader column={column} label="Amount" />,
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} label="Amount" />
+      ),
       cell: ({ row }) => {
         const amount = row.getValue<number>("amount")
         const currency = row.original.currency
+        const frequency = row.original.frequency
+        const freqLabel =
+          frequency === "weekly"
+            ? "wk"
+            : frequency === "monthly"
+              ? "mo"
+              : "yr"
+
         return (
           <EditableCell
             value={amount}
             rowId={row.original.id}
             field="amount"
             type="number"
-            onSave={handleExpenseSave}
+            onSave={handleSubscriptionSave}
             onOptimisticUpdate={onOptimisticUpdate}
             formatDisplay={(v) => (
               <div className="font-mono font-medium tabular-nums">
@@ -278,6 +318,7 @@ export function getExpenseColumns(
                   style: "currency",
                   currency: currency || "USD",
                 })}
+                <span className="text-xs text-muted-foreground">/{freqLabel}</span>
               </div>
             )}
           />
@@ -293,7 +334,9 @@ export function getExpenseColumns(
     {
       id: "actions",
       header: () => <div className="sr-only">Actions</div>,
-      cell: ({ row }) => <ExpenseRowActions expense={row.original} />,
+      cell: ({ row }) => (
+        <SubscriptionRowActions subscription={row.original} />
+      ),
       enableSorting: false,
       enableHiding: false,
     },

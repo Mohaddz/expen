@@ -1,7 +1,7 @@
 import { flexRender, type Table as TanstackTable } from "@tanstack/react-table";
 import type * as React from "react";
 
-import { DataTablePagination } from "@/components/data-table/data-table-pagination";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import {
   Table,
   TableBody,
@@ -16,24 +16,26 @@ import { cn } from "@/lib/utils";
 interface DataTableProps<TData> extends React.ComponentProps<"div"> {
   table: TanstackTable<TData>;
   actionBar?: React.ReactNode;
+  footer?: React.ReactNode;
 }
 
 export function DataTable<TData>({
   table,
   actionBar,
+  footer,
   children,
   className,
   ...props
 }: DataTableProps<TData>) {
   return (
     <div
-      className={cn("flex w-full flex-col gap-2.5 overflow-auto", className)}
+      className={cn("flex h-full w-full flex-col gap-2.5", className)}
       {...props}
     >
-      {children}
-      <div className="overflow-hidden rounded-md border">
+      <div className="shrink-0">{children}</div>
+      <ScrollArea className="min-h-0 flex-1 rounded-md border">
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 z-10 bg-background">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
@@ -89,13 +91,13 @@ export function DataTable<TData>({
             )}
           </TableBody>
         </Table>
-      </div>
-      <div className="flex flex-col gap-2.5">
-        <DataTablePagination table={table} />
-        {actionBar &&
-          table.getFilteredSelectedRowModel().rows.length > 0 &&
-          actionBar}
-      </div>
+        {footer}
+        <ScrollBar orientation="horizontal" />
+      </ScrollArea>
+      {actionBar &&
+        table.getFilteredSelectedRowModel().rows.length > 0 && (
+          <div className="flex flex-col gap-2.5">{actionBar}</div>
+        )}
     </div>
   );
 }

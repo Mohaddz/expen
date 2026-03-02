@@ -4,7 +4,7 @@ import { db } from "@/lib/db"
 import { expenses, categories } from "@/lib/db/schema"
 import { requireSession } from "@/lib/session"
 import { expenseSchema } from "@/lib/validators"
-import { eq, desc, and, sql, gte, lte } from "drizzle-orm"
+import { eq, desc, and, sql, gte, lte, inArray } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 
 export type ExpenseRow = {
@@ -21,10 +21,10 @@ export type ExpenseRow = {
   createdAt: Date
 }
 
-export async function getExpenses() {
+export async function getExpenses(opts?: { limit?: number; offset?: number }) {
   const session = await requireSession()
 
-  const rows = await db
+  let query = db
     .select({
       id: expenses.id,
       title: expenses.title,
@@ -42,6 +42,15 @@ export async function getExpenses() {
     .leftJoin(categories, eq(expenses.categoryId, categories.id))
     .where(eq(expenses.userId, session.user.id))
     .orderBy(desc(expenses.date), desc(expenses.createdAt))
+
+  if (opts?.limit != null) {
+    query = query.limit(opts.limit) as typeof query
+  }
+  if (opts?.offset != null) {
+    query = query.offset(opts.offset) as typeof query
+  }
+
+  const rows = await query
 
   return { data: rows as ExpenseRow[] }
 }
@@ -114,6 +123,47 @@ export async function deleteExpense(id: string) {
 
   await db
     .delete(expenses)
+    .where(and(eq(expenses.id, id), eq(expenses.userId, session.user.id)))
+
+  revalidatePath("/expenses")
+  revalidatePath("/dashboard")
+}
+
+export async function deleteExpenses(ids: string[]) {
+  const session = await requireSession()
+
+  await db
+    .delete(expenses)
+    .where(and(inArray(expenses.id, ids), eq(expenses.userId, session.user.id)))
+
+  revalidatePath("/expenses")
+  revalidatePath("/dashboard")
+}
+
+const ALLOWED_EXPENSE_FIELDS = [
+  "title",
+  "amount",
+  "currency",
+  "date",
+  "categoryId",
+  "notes",
+  "status",
+] as const
+
+export async function updateExpenseField(
+  id: string,
+  field: string,
+  value: string | number | null
+) {
+  if (!ALLOWED_EXPENSE_FIELDS.includes(field as (typeof ALLOWED_EXPENSE_FIELDS)[number])) {
+    throw new Error(`Invalid field: ${field}`)
+  }
+
+  const session = await requireSession()
+
+  await db
+    .update(expenses)
+    .set({ [field]: value, updatedAt: new Date() })
     .where(and(eq(expenses.id, id), eq(expenses.userId, session.user.id)))
 
   revalidatePath("/expenses")

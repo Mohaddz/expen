@@ -10,18 +10,19 @@ import type { Option } from "@/types/data-table"
 export default async function ExpensesPage() {
   await seedDefaultCategories()
 
-  const [{ data }, categories] = await Promise.all([
-    getExpenses(),
+  const [{ data: initialData }, categories] = await Promise.all([
+    getExpenses({ limit: 20, offset: 0 }),
     getCategories(),
   ])
 
   const categoryOptions: Option[] = categories.map((cat) => ({
     label: cat.name,
     value: cat.id,
+    color: cat.color,
   }))
 
   return (
-    <>
+    <div className="absolute inset-0 flex flex-col">
       <AppHeader title="Expenses">
         <Button asChild size="sm" className="h-8">
           <Link href="/expenses/new">
@@ -30,12 +31,12 @@ export default async function ExpensesPage() {
           </Link>
         </Button>
       </AppHeader>
-      <div className="flex-1 overflow-auto">
+      <div className="min-h-0 flex-1">
         <ExpensesDataTable
-          data={data}
+          initialData={initialData}
           categoryOptions={categoryOptions}
         />
       </div>
-    </>
+    </div>
   )
 }

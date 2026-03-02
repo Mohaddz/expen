@@ -13,11 +13,11 @@ import {
   type VisibilityState,
 } from "@tanstack/react-table"
 
-import { getExpenses, deleteExpenses, type ExpenseRow } from "@/actions/expenses"
+import { getSubscriptions, deleteSubscriptions, type SubscriptionRow } from "@/actions/subscriptions"
 import { DataTable } from "@/components/data-table/data-table"
 import { DataTableSortList } from "@/components/data-table/data-table-sort-list"
 import { DataTableToolbar } from "@/components/data-table/data-table-toolbar"
-import { getExpenseColumns } from "@/components/expenses/expense-columns"
+import { getSubscriptionColumns } from "@/components/subscriptions/subscription-columns"
 import { Button } from "@/components/ui/button"
 import { Trash2 } from "lucide-react"
 import { toast } from "sonner"
@@ -26,17 +26,17 @@ import type { Option } from "@/types/data-table"
 
 const PAGE_SIZE = 20
 
-interface ExpensesDataTableProps {
-  initialData: ExpenseRow[]
+interface SubscriptionsDataTableProps {
+  initialData: SubscriptionRow[]
   categoryOptions: Option[]
 }
 
-export function ExpensesDataTable({
+export function SubscriptionsDataTable({
   initialData,
   categoryOptions,
-}: ExpensesDataTableProps) {
+}: SubscriptionsDataTableProps) {
   const router = useRouter()
-  const [data, setData] = React.useState<ExpenseRow[]>(initialData)
+  const [data, setData] = React.useState<SubscriptionRow[]>(initialData)
   const [loading, setLoading] = React.useState(false)
   const [hasMore, setHasMore] = React.useState(initialData.length >= PAGE_SIZE)
   const sentinelRef = React.useRef<HTMLDivElement>(null)
@@ -45,7 +45,7 @@ export function ExpensesDataTable({
   React.useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false } }, [])
 
   const [sorting, setSorting] = React.useState<SortingState>([
-    { id: "date", desc: true },
+    { id: "nextDueDate", desc: false },
   ])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
     [],
@@ -58,7 +58,7 @@ export function ExpensesDataTable({
     if (loading || !hasMore) return
     setLoading(true)
     try {
-      const { data: nextData } = await getExpenses({
+      const { data: nextData } = await getSubscriptions({
         limit: PAGE_SIZE,
         offset: data.length,
       })
@@ -107,7 +107,7 @@ export function ExpensesDataTable({
   )
 
   const columns = React.useMemo(
-    () => getExpenseColumns(categoryOptions, handleOptimisticUpdate),
+    () => getSubscriptionColumns(categoryOptions, handleOptimisticUpdate),
     [categoryOptions, handleOptimisticUpdate],
   )
 
@@ -142,39 +142,19 @@ export function ExpensesDataTable({
     },
   })
 
-  const filteredRowCount = table.getFilteredRowModel().rows.length
   const selectedCount = table.getFilteredSelectedRowModel().rows.length
-
-  // When client-side filtering yields no results but more data exists, the sentinel
-  // may not be visible (content doesn't fill the scroll container). Proactively
-  // load more so the user can reach matching items that live in unloaded pages.
-  const hasActiveFilters = columnFilters.some((f) => {
-    if (f.value == null) return false
-    if (Array.isArray(f.value)) return f.value.length > 0
-    return f.value !== ""
-  })
-  React.useEffect(() => {
-    if (
-      hasActiveFilters &&
-      filteredRowCount === 0 &&
-      hasMore &&
-      !loading
-    ) {
-      loadMore()
-    }
-  }, [hasActiveFilters, filteredRowCount, hasMore, loading, loadMore])
 
   const handleBulkDelete = React.useCallback(async () => {
     const selectedRows = table.getFilteredSelectedRowModel().rows
     const ids = selectedRows.map((r) => r.original.id)
     try {
-      await deleteExpenses(ids)
+      await deleteSubscriptions(ids)
       setData((prev) => prev.filter((row) => !ids.includes(row.id)))
       table.toggleAllRowsSelected(false)
-      toast.success(`Deleted ${ids.length} expense(s)`)
+      toast.success(`Deleted ${ids.length} subscription(s)`)
       router.refresh()
     } catch {
-      toast.error("Failed to delete expenses")
+      toast.error("Failed to delete subscriptions")
     }
   }, [table, router])
 

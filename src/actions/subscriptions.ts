@@ -4,7 +4,7 @@ import { db } from "@/lib/db"
 import { subscriptions, categories } from "@/lib/db/schema"
 import { requireSession } from "@/lib/session"
 import { subscriptionSchema } from "@/lib/validators"
-import { eq, and, desc, sql } from "drizzle-orm"
+import { eq, and, desc, sql, inArray } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { addWeeks, addMonths, addYears } from "date-fns"
 
@@ -35,12 +35,35 @@ function calculateNextDueDate(
   return next.toISOString().split("T")[0]
 }
 
-export async function getSubscriptions() {
+export type SubscriptionRow = {
+  id: string
+  name: string
+  amount: number
+  currency: string
+  frequency: string
+  nextDueDate: string
+  active: boolean
+  categoryId: string | null
+  categoryName: string | null
+  categoryColor: string | null
+}
+
+export async function getSubscriptions(opts?: {
+  limit?: number
+  offset?: number
+}) {
   const session = await requireSession()
 
-  return db
+  let query = db
     .select({
-      subscription: subscriptions,
+      id: subscriptions.id,
+      name: subscriptions.name,
+      amount: sql<number>`${subscriptions.amount}::numeric`,
+      currency: subscriptions.currency,
+      frequency: subscriptions.frequency,
+      nextDueDate: subscriptions.nextDueDate,
+      active: subscriptions.active,
+      categoryId: subscriptions.categoryId,
       categoryName: categories.name,
       categoryColor: categories.color,
     })
@@ -48,6 +71,17 @@ export async function getSubscriptions() {
     .leftJoin(categories, eq(subscriptions.categoryId, categories.id))
     .where(eq(subscriptions.userId, session.user.id))
     .orderBy(desc(subscriptions.active), subscriptions.nextDueDate)
+
+  if (opts?.limit != null) {
+    query = query.limit(opts.limit) as typeof query
+  }
+  if (opts?.offset != null) {
+    query = query.offset(opts.offset) as typeof query
+  }
+
+  const rows = await query
+
+  return { data: rows as SubscriptionRow[] }
 }
 
 export async function createSubscription(data: unknown) {
@@ -135,6 +169,60 @@ export async function deleteSubscription(id: string) {
 
   await db
     .delete(subscriptions)
+    .where(
+      and(eq(subscriptions.id, id), eq(subscriptions.userId, session.user.id))
+    )
+
+  revalidatePath("/subscriptions")
+  revalidatePath("/dashboard")
+}
+
+export async function deleteSubscriptions(ids: string[]) {
+  const session = await requireSession()
+
+  await db
+    .delete(subscriptions)
+    .where(
+      and(
+        inArray(subscriptions.id, ids),
+        eq(subscriptions.userId, session.user.id)
+      )
+    )
+
+  revalidatePath("/subscriptions")
+  revalidatePath("/dashboard")
+}
+
+const ALLOWED_SUBSCRIPTION_FIELDS = [
+  "name",
+  "amount",
+  "currency",
+  "frequency",
+  "startDate",
+  "nextDueDate",
+  "categoryId",
+  "notes",
+  "active",
+] as const
+
+export async function updateSubscriptionField(
+  id: string,
+  field: string,
+  value: string | number | boolean | null
+) {
+  if (
+    !ALLOWED_SUBSCRIPTION_FIELDS.includes(
+      field as (typeof ALLOWED_SUBSCRIPTION_FIELDS)[number]
+    )
+  ) {
+    throw new Error(`Invalid field: ${field}`)
+  }
+
+  const session = await requireSession()
+
+  await db
+    .update(subscriptions)
+    .set({ [field]: value, updatedAt: new Date() })
     .where(
       and(eq(subscriptions.id, id), eq(subscriptions.userId, session.user.id))
     )
