@@ -43,9 +43,9 @@ export async function ensureBucket() {
   } catch (err: unknown) {
     const isNotFound =
       err instanceof Error &&
-      ("$metadata" in (err as Record<string, unknown>) &&
+      (("$metadata" in (err as Record<string, unknown>) &&
         (err as Record<string, unknown> & { $metadata: { httpStatusCode?: number } }).$metadata?.httpStatusCode === 404) ||
-      (err as { name?: string }).name === "NotFound";
+      (err as { name?: string }).name === "NotFound");
     if (!isNotFound) throw err;
     await s3Client.send(new CreateBucketCommand({ Bucket: BUCKET }))
     console.log(`Created S3 bucket: ${BUCKET}`)
