@@ -15,6 +15,7 @@ services:
       - S3_BUCKET=invoices
       - S3_REGION=us-east-1
       - OLLAMA_BASE_URL=http://ollama:11434
+      - OCR_MODEL=glm-ocr:q8_0
     depends_on:
       postgres:
         condition: service_healthy
@@ -41,7 +42,6 @@ services:
 
   rustfs:
     image: rustfs/rustfs:latest
-    command: server /data --console-address ":9001"
     environment:
       - RUSTFS_ACCESS_KEY=rustfsadmin
       - RUSTFS_SECRET_KEY=rustfsadmin123

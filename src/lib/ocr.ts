@@ -1,4 +1,6 @@
-const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || "http://localhost:11434"
+const OLLAMA_BASE_URL =
+  process.env.OLLAMA_BASE_URL || "http://localhost:11434"
+const OCR_MODEL = process.env.OCR_MODEL || "glm-ocr:q8_0"
 
 export interface OcrResult {
   vendor: string | null
@@ -14,16 +16,71 @@ export interface OcrResult {
   }[]
 }
 
+const EMPTY_RESULT: OcrResult = {
+  vendor: null,
+  date: null,
+  total: null,
+  tax: null,
+  currency: null,
+  lineItems: [],
+}
+
+/**
+ * Ensure the OCR model is available in Ollama, pulling it if necessary.
+ * This is called once before the first inference request.
+ */
+let modelReady: Promise<void> | null = null
+
+function ensureModel(): Promise<void> {
+  if (modelReady) return modelReady
+
+  modelReady = (async () => {
+    try {
+      // Check if model is already pulled
+      const res = await fetch(`${OLLAMA_BASE_URL}/api/show`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: OCR_MODEL }),
+      })
+
+      if (res.ok) return
+
+      // Model not found — pull it
+      console.log(`Pulling OCR model ${OCR_MODEL}...`)
+      const pullRes = await fetch(`${OLLAMA_BASE_URL}/api/pull`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: OCR_MODEL, stream: false }),
+      })
+
+      if (!pullRes.ok) {
+        throw new Error(
+          `Failed to pull model ${OCR_MODEL}: ${pullRes.status}`
+        )
+      }
+      console.log(`OCR model ${OCR_MODEL} ready.`)
+    } catch (error) {
+      // Reset so next call retries
+      modelReady = null
+      throw error
+    }
+  })()
+
+  return modelReady
+}
+
 export async function extractInvoiceData(
   imageBase64: string,
   mimeType: string = "image/png"
 ): Promise<OcrResult> {
   try {
+    await ensureModel()
+
     const response = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "glm-ocr",
+        model: OCR_MODEL,
         messages: [
           {
             role: "user",
@@ -54,27 +111,11 @@ If a field cannot be determined, use null. For lineItems, return an empty array 
     const text = result.message?.content || ""
 
     const jsonMatch = text.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) {
-      return {
-        vendor: null,
-        date: null,
-        total: null,
-        tax: null,
-        currency: null,
-        lineItems: [],
-      }
-    }
+    if (!jsonMatch) return { ...EMPTY_RESULT }
 
     return JSON.parse(jsonMatch[0]) as OcrResult
   } catch (error) {
     console.error("OCR extraction failed:", error)
-    return {
-      vendor: null,
-      date: null,
-      total: null,
-      tax: null,
-      currency: null,
-      lineItems: [],
-    }
+    return { ...EMPTY_RESULT }
   }
 }
