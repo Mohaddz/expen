@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useState } from "react"
+import { useCallback, useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -31,6 +31,38 @@ interface Category {
 }
 
 type Step = "upload" | "processing" | "review" | "done" | "error"
+
+/**
+ * Render the first page of a PDF to a PNG image and return as base64.
+ */
+async function pdfToImageBase64(file: File): Promise<string> {
+  const pdfjsLib = await import("pdfjs-dist")
+  pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+    "pdfjs-dist/build/pdf.worker.min.mjs",
+    import.meta.url
+  ).toString()
+
+  const arrayBuffer = await file.arrayBuffer()
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
+  const page = await pdf.getPage(1)
+
+  // Render at 2x scale for better OCR accuracy
+  const scale = 2
+  const viewport = page.getViewport({ scale })
+  const canvas = document.createElement("canvas")
+  canvas.width = viewport.width
+  canvas.height = viewport.height
+
+  await page.render({
+    canvasContext: canvas.getContext("2d")!,
+    viewport,
+    canvas,
+  }).promise
+
+  // Convert canvas to base64 PNG (strip the data:image/png;base64, prefix)
+  const dataUrl = canvas.toDataURL("image/png")
+  return dataUrl.split(",")[1]
+}
 
 export function UploadZone({ categories }: { categories: Category[] }) {
   const [step, setStep] = useState<Step>("upload")
@@ -99,10 +131,24 @@ export function UploadZone({ categories }: { categories: Category[] }) {
       })
       setInvoiceId(invoice.id)
 
-      const arrayBuffer = await f.arrayBuffer()
-      const base64 = Buffer.from(arrayBuffer).toString("base64")
+      // Convert file to a PNG image for OCR (PDFs need rendering first)
+      let imageBase64: string
+      let imageMime = "image/png"
 
-      const result = await processInvoiceOcr(invoice.id, base64, f.type)
+      if (f.type === "application/pdf") {
+        imageBase64 = await pdfToImageBase64(f)
+      } else {
+        const arrayBuffer = await f.arrayBuffer()
+        imageBase64 = btoa(
+          new Uint8Array(arrayBuffer).reduce(
+            (data, byte) => data + String.fromCharCode(byte),
+            ""
+          )
+        )
+        imageMime = f.type
+      }
+
+      const result = await processInvoiceOcr(invoice.id, imageBase64, imageMime)
       setOcrResult(result)
 
       setFormData({
