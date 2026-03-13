@@ -105,6 +105,8 @@ export function UploadZone({ categories }: { categories: Category[] }) {
 
     setStep("processing")
 
+    let createdInvoiceId: string | null = null
+
     try {
       const presignRes = await fetch("/api/upload/presign", {
         method: "POST",
@@ -129,6 +131,7 @@ export function UploadZone({ categories }: { categories: Category[] }) {
         fileKey: key,
         fileName: f.name,
       })
+      createdInvoiceId = invoice.id
       setInvoiceId(invoice.id)
 
       // Convert file to a PNG image for OCR (PDFs need rendering first)
@@ -162,17 +165,23 @@ export function UploadZone({ categories }: { categories: Category[] }) {
       setStep("review")
     } catch (error) {
       console.error("Upload/OCR failed:", error)
-      setStep("error")
-      toast.error("Processing failed. You can still enter details manually.")
 
-      setFormData({
-        title: f.name,
-        amount: "",
-        currency: "USD",
-        date: new Date().toISOString().split("T")[0],
-        categoryId: "",
-      })
-      setStep("review")
+      if (createdInvoiceId) {
+        // Invoice exists — let user manually enter details
+        toast.error("Processing failed. You can still enter details manually.")
+        setFormData({
+          title: f.name,
+          amount: "",
+          currency: "USD",
+          date: new Date().toISOString().split("T")[0],
+          categoryId: "",
+        })
+        setStep("review")
+      } else {
+        // Failed before invoice creation (presign/upload error) — retry
+        toast.error("Upload failed. Please try again.")
+        setStep("error")
+      }
     }
   }
 
@@ -182,10 +191,15 @@ export function UploadZone({ categories }: { categories: Category[] }) {
       return
     }
 
+    if (!invoiceId) {
+      toast.error("No invoice linked. Please start over.")
+      return
+    }
+
     setSaving(true)
     try {
       await createExpenseFromInvoice({
-        invoiceId: invoiceId!,
+        invoiceId,
         title: formData.title,
         amount: formData.amount,
         currency: formData.currency,
