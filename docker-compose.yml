@@ -24,22 +24,20 @@ services:
     restart: unless-stopped
 
   rustfs-init:
-    image: python:3.12-alpine
-    command: >
-      sh -c "pip install -q boto3 &&
-      python -c \"
-      import boto3, botocore
-      s3 = boto3.client('s3', endpoint_url='http://rustfs:9000',
-        aws_access_key_id='rustfsadmin', aws_secret_access_key='rustfsadmin123',
-        region_name='us-east-1')
-      try:
-        s3.head_bucket(Bucket='invoices')
-      except botocore.exceptions.ClientError:
-        s3.create_bucket(Bucket='invoices')
-        print('Created invoices bucket')
-      else:
-        print('Bucket already exists')
-      \""
+    image: amazon/aws-cli:latest
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        until aws --endpoint-url http://rustfs:9000 s3 ls 2>/dev/null; do
+          echo "Waiting for RustFS..."
+          sleep 2
+        done
+        aws --endpoint-url http://rustfs:9000 s3 mb s3://invoices 2>/dev/null || true
+        echo "Bucket ready"
+    environment:
+      - AWS_ACCESS_KEY_ID=rustfsadmin
+      - AWS_SECRET_ACCESS_KEY=rustfsadmin123
+      - AWS_DEFAULT_REGION=us-east-1
     depends_on:
       rustfs:
         condition: service_started
