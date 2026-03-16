@@ -1,5 +1,5 @@
 import { auth } from "@/lib/auth"
-import { getUploadPresignedUrl } from "@/lib/s3"
+import { getUploadPresignedUrl, ensureBucket } from "@/lib/s3"
 import { headers } from "next/headers"
 import { NextResponse } from "next/server"
 import { randomUUID } from "crypto"
@@ -16,6 +16,7 @@ export async function POST(request: Request) {
   const key = `${session.user.id}/${randomUUID()}.${ext}`
 
   try {
+    await ensureBucket()
     const url = await getUploadPresignedUrl(key, contentType)
     return NextResponse.json({ url, key })
   } catch (error) {

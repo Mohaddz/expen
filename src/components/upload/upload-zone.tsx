@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useState } from "react"
+import { useCallback, useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -31,6 +31,38 @@ interface Category {
 }
 
 type Step = "upload" | "processing" | "review" | "done" | "error"
+
+/**
+ * Render the first page of a PDF to a PNG image and return as base64.
+ */
+async function pdfToImageBase64(file: File): Promise<string> {
+  const pdfjsLib = await import("pdfjs-dist")
+  pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+    "pdfjs-dist/build/pdf.worker.min.mjs",
+    import.meta.url
+  ).toString()
+
+  const arrayBuffer = await file.arrayBuffer()
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
+  const page = await pdf.getPage(1)
+
+  // Render at 2x scale for better OCR accuracy
+  const scale = 2
+  const viewport = page.getViewport({ scale })
+  const canvas = document.createElement("canvas")
+  canvas.width = viewport.width
+  canvas.height = viewport.height
+
+  await page.render({
+    canvasContext: canvas.getContext("2d")!,
+    viewport,
+    canvas,
+  }).promise
+
+  // Convert canvas to base64 PNG (strip the data:image/png;base64, prefix)
+  const dataUrl = canvas.toDataURL("image/png")
+  return dataUrl.split(",")[1]
+}
 
 export function UploadZone({ categories }: { categories: Category[] }) {
   const [step, setStep] = useState<Step>("upload")
@@ -73,6 +105,8 @@ export function UploadZone({ categories }: { categories: Category[] }) {
 
     setStep("processing")
 
+    let createdInvoiceId: string | null = null
+
     try {
       const presignRes = await fetch("/api/upload/presign", {
         method: "POST",
@@ -97,12 +131,20 @@ export function UploadZone({ categories }: { categories: Category[] }) {
         fileKey: key,
         fileName: f.name,
       })
+      createdInvoiceId = invoice.id
       setInvoiceId(invoice.id)
 
+      // Convert file to base64 for OCR (API supports both images and PDFs)
       const arrayBuffer = await f.arrayBuffer()
-      const base64 = Buffer.from(arrayBuffer).toString("base64")
+      const imageBase64 = btoa(
+        new Uint8Array(arrayBuffer).reduce(
+          (data, byte) => data + String.fromCharCode(byte),
+          ""
+        )
+      )
+      const imageMime = f.type
 
-      const result = await processInvoiceOcr(invoice.id, base64, f.type)
+      const result = await processInvoiceOcr(invoice.id, imageBase64, imageMime)
       setOcrResult(result)
 
       setFormData({
@@ -116,17 +158,23 @@ export function UploadZone({ categories }: { categories: Category[] }) {
       setStep("review")
     } catch (error) {
       console.error("Upload/OCR failed:", error)
-      setStep("error")
-      toast.error("Processing failed. You can still enter details manually.")
 
-      setFormData({
-        title: f.name,
-        amount: "",
-        currency: "USD",
-        date: new Date().toISOString().split("T")[0],
-        categoryId: "",
-      })
-      setStep("review")
+      if (createdInvoiceId) {
+        // Invoice exists — let user manually enter details
+        toast.error("Processing failed. You can still enter details manually.")
+        setFormData({
+          title: f.name,
+          amount: "",
+          currency: "USD",
+          date: new Date().toISOString().split("T")[0],
+          categoryId: "",
+        })
+        setStep("review")
+      } else {
+        // Failed before invoice creation (presign/upload error) — retry
+        toast.error("Upload failed. Please try again.")
+        setStep("error")
+      }
     }
   }
 
@@ -136,10 +184,15 @@ export function UploadZone({ categories }: { categories: Category[] }) {
       return
     }
 
+    if (!invoiceId) {
+      toast.error("No invoice linked. Please start over.")
+      return
+    }
+
     setSaving(true)
     try {
       await createExpenseFromInvoice({
-        invoiceId: invoiceId!,
+        invoiceId,
         title: formData.title,
         amount: formData.amount,
         currency: formData.currency,
