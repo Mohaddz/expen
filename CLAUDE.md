@@ -44,10 +44,10 @@ There are no tests configured in this project.
 - `subscriptions` — recurring costs with `frequency` (weekly/monthly/yearly) and `nextDueDate`
 - `invoices` — uploaded files with OCR status and extracted data in `ocrData` (JSONB)
 
-**OCR pipeline:** Files are uploaded directly to S3-compatible storage (RustFS) via presigned URLs. The invoice record is created with `ocrStatus: "pending"`, then OCR is triggered via Ollama (`glm-ocr:q8_0` model from [zai-org/GLM-OCR](https://github.com/zai-org/GLM-OCR)) through `src/lib/ocr.ts`. The model is auto-pulled on first request if not already available. Configure via `OCR_MODEL` env var.
+**OCR pipeline:** Files are uploaded directly to S3-compatible storage (RustFS) via presigned URLs. PDFs are converted to PNG client-side via `pdfjs-dist` before OCR. The invoice record is created with `ocrStatus: "pending"`, then OCR is triggered via the HuggingFace Inference API ([zai-org/GLM-OCR](https://github.com/zai-org/GLM-OCR) `layout_parsing` endpoint) through `src/lib/ocr.ts`. Requires a `HF_TOKEN` env var.
 
 ## Environment
 
-Requires `.env.local` with `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, S3 credentials (`S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET`, `S3_REGION`), `OLLAMA_BASE_URL`, and optionally `OCR_MODEL` (defaults to `glm-ocr:q8_0`). See README for defaults.
+Requires `.env.local` with `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, S3 credentials (`S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET`, `S3_REGION`), and `HF_TOKEN` (HuggingFace API token for OCR). Optionally set `HF_API_URL` to override the default GLM-OCR endpoint. See README for defaults.
 
-Docker Compose (`docker-compose.yml`) provides PostgreSQL, RustFS (S3), and Ollama for local development.
+Docker Compose (`docker-compose.yml`) provides PostgreSQL and RustFS (S3) for local development.
