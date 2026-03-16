@@ -1,6 +1,7 @@
-const OLLAMA_BASE_URL =
-  process.env.OLLAMA_BASE_URL || "http://localhost:11434"
-const OCR_MODEL = process.env.OCR_MODEL || "glm-ocr:q8_0"
+const HF_API_URL =
+  process.env.HF_API_URL ||
+  "https://router.huggingface.co/zai-org/api/paas/v4/layout_parsing"
+const HF_TOKEN = process.env.HF_TOKEN || ""
 
 export interface OcrResult {
   vendor: string | null
@@ -26,75 +27,50 @@ const EMPTY_RESULT: OcrResult = {
 }
 
 /**
- * Ensure the OCR model is available in Ollama, pulling it if necessary.
+ * Call HuggingFace GLM-OCR layout parsing API with a base64-encoded file.
+ * The API expects JSON: { model: "glm-ocr", file: "data:<mime>;base64,<data>" }
  */
-let modelReady: Promise<void> | null = null
+async function ocrExtract(base64Data: string, mimeType: string): Promise<string> {
+  if (!HF_TOKEN) {
+    throw new Error("HF_TOKEN environment variable is required for OCR")
+  }
 
-function ensureModel(): Promise<void> {
-  if (modelReady) return modelReady
+  const dataUri = `data:${mimeType};base64,${base64Data}`
 
-  modelReady = (async () => {
-    try {
-      const res = await fetch(`${OLLAMA_BASE_URL}/api/show`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: OCR_MODEL }),
-      })
-
-      if (res.ok) return
-
-      console.log(`Pulling OCR model ${OCR_MODEL}...`)
-      const pullRes = await fetch(`${OLLAMA_BASE_URL}/api/pull`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: OCR_MODEL, stream: false }),
-      })
-
-      if (!pullRes.ok) {
-        throw new Error(
-          `Failed to pull model ${OCR_MODEL}: ${pullRes.status}`
-        )
-      }
-      console.log(`OCR model ${OCR_MODEL} ready.`)
-    } catch (error) {
-      modelReady = null
-      throw error
-    }
-  })()
-
-  return modelReady
-}
-
-/**
- * Call GLM-OCR with the correct prompt format.
- * GLM-OCR expects: "Text Recognition:" or "Table Recognition:" as the prompt.
- */
-async function ocrExtract(
-  imageBase64: string,
-  mode: "Text Recognition:" | "Table Recognition:"
-): Promise<string> {
-  const response = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
+  const response = await fetch(HF_API_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      Authorization: `Bearer ${HF_TOKEN}`,
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify({
-      model: OCR_MODEL,
-      messages: [
-        {
-          role: "user",
-          content: mode,
-          images: [imageBase64],
-        },
-      ],
-      stream: false,
+      model: "glm-ocr",
+      file: dataUri,
     }),
   })
 
   if (!response.ok) {
-    throw new Error(`Ollama request failed: ${response.status}`)
+    const errorText = await response.text().catch(() => "")
+    throw new Error(
+      `HuggingFace OCR request failed: ${response.status} ${errorText}`
+    )
   }
 
   const result = await response.json()
-  return result.message?.content || ""
+
+  if (result.error) {
+    throw new Error(`GLM-OCR error: ${result.error.message || JSON.stringify(result.error)}`)
+  }
+
+  // The layout_parsing API returns { md_results: "..." } with markdown text
+  if (result.md_results) return result.md_results
+
+  // Fallback: try other common fields
+  if (typeof result === "string") return result
+  if (result.text) return result.text
+  if (result.content) return result.content
+
+  return JSON.stringify(result)
 }
 
 /**
@@ -105,11 +81,10 @@ function parseInvoiceText(raw: string): OcrResult {
   const text = raw
     .replace(/```(?:markdown)?\n?/g, "")
     .replace(/```$/g, "")
+    .replace(/!\[.*?\]\(.*?\)/g, "") // remove markdown images
     .trim()
 
   if (!text) return { ...EMPTY_RESULT }
-
-  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean)
 
   let vendor: string | null = null
   let date: string | null = null
@@ -128,11 +103,62 @@ function parseInvoiceText(raw: string): OcrResult {
   else if (/€/.test(text)) currency = "EUR"
   else if (/£/.test(text)) currency = "GBP"
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]
-    const lower = line.toLowerCase()
+  // Parse HTML table rows if present
+  const tableMatch = text.match(/<table[^>]*>([\s\S]*?)<\/table>/i)
+  if (tableMatch) {
+    const rows = tableMatch[1].match(/<tr>([\s\S]*?)<\/tr>/gi) || []
+    for (const row of rows) {
+      const cells = (row.match(/<td[^>]*>([\s\S]*?)<\/td>/gi) || [])
+        .map((c) => c.replace(/<[^>]*>/g, "").trim())
+        .filter((c) => c.length > 0)
 
-    // Vendor: usually near the top, a company name line (Inc, LLC, Ltd, Corp, etc.)
+      if (cells.length === 0) continue
+
+      // "Amount due" / "Total" rows in summary section (usually 2 cells)
+      const label = cells[0].toLowerCase()
+      const value = cells[cells.length - 1]
+
+      if (/amount\s*due|total\s*due|balance\s*due/i.test(label)) {
+        const m = value.match(/[$€£]?([\d,]+\.?\d*)/)
+        if (m) total = m[1].replace(/,/g, "")
+      } else if (/^total$/i.test(label) && !total) {
+        const m = value.match(/[$€£]?([\d,]+\.?\d*)/)
+        if (m) total = m[1].replace(/,/g, "")
+      } else if (/^subtotal$/i.test(label) && !total) {
+        const m = value.match(/[$€£]?([\d,]+\.?\d*)/)
+        if (m) total = m[1].replace(/,/g, "")
+      } else if (/tax|vat|gst/i.test(label)) {
+        const m = value.match(/[$€£]?([\d,]+\.?\d*)/)
+        if (m) tax = m[1].replace(/,/g, "")
+      }
+
+      // Line item rows (Description, Qty, Unit price, Amount — typically 4+ cells)
+      if (cells.length >= 4) {
+        const desc = cells[0]
+        if (
+          /^(description|item|product|service)/i.test(desc) ||
+          /qty|quantity|unit\s*price|amount/i.test(desc)
+        ) continue
+        const qtyStr = cells.find((c) => /^\d+$/.test(c))
+        const prices = cells.filter((c) => /^\$?[\d,]+\.?\d*$/.test(c.replace(/^\$/, "")))
+        if (qtyStr && prices.length >= 1) {
+          lineItems.push({
+            description: desc,
+            quantity: parseInt(qtyStr) || 1,
+            unitPrice: prices[0].replace(/[$,]/g, ""),
+            total: (prices[1] || prices[0]).replace(/[$,]/g, ""),
+          })
+        }
+      }
+    }
+  }
+
+  // Parse non-table lines for vendor, date, and fallback totals
+  const plainText = text.replace(/<table[^>]*>[\s\S]*?<\/table>/gi, "")
+  const lines = plainText.split("\n").map((l) => l.replace(/^#+\s*/, "").trim()).filter(Boolean)
+
+  for (const line of lines) {
+    // Vendor: company name with Inc, LLC, Ltd, etc.
     if (
       !vendor &&
       /\b(inc|llc|ltd|corp|company|co\.|gmbh|sarl)\b/i.test(line)
@@ -140,9 +166,16 @@ function parseInvoiceText(raw: string): OcrResult {
       vendor = line.replace(/[,.]$/, "").trim()
     }
 
+    // Also try to pick up vendor from known patterns like "XYZ Purchase" or "XYZ EIN:"
+    if (!vendor) {
+      const einMatch = line.match(/^(.+?)\s+EIN:/i)
+      if (einMatch) vendor = einMatch[1].trim()
+      const purchaseMatch = line.match(/^(.+?)\s+Purchase$/i)
+      if (purchaseMatch) vendor = purchaseMatch[1].trim()
+    }
+
     // Date patterns
     if (!date) {
-      // "Date of issue March 1, 2026" or "Date: 2026-03-01" etc.
       const dateLineMatch = line.match(
         /(?:date\s*(?:of\s*issue)?|invoice\s*date|issued?)\s*[:\s]*(.+)/i
       )
@@ -151,59 +184,28 @@ function parseInvoiceText(raw: string): OcrResult {
       }
     }
 
-    // Amount due / Total
-    const amountDueMatch = line.match(
-      /(?:amount\s*due|total\s*due|balance\s*due)[:\s]*[$€£]?\s*([\d,]+\.?\d*)/i
-    )
-    if (amountDueMatch) {
-      total = amountDueMatch[1].replace(/,/g, "")
-    }
-
-    // "Total $52.97" pattern
+    // Fallback: amount from non-table text like "$52.97 USD due March 1, 2026"
     if (!total) {
-      const totalMatch = line.match(
-        /^total\s*[$€£]?\s*([\d,]+\.?\d*)/i
+      const amountDueMatch = line.match(
+        /(?:amount\s*due|total\s*due|balance\s*due)[:\s]*[$€£]?\s*([\d,]+\.?\d*)/i
       )
-      if (totalMatch) {
-        total = totalMatch[1].replace(/,/g, "")
+      if (amountDueMatch) {
+        total = amountDueMatch[1].replace(/,/g, "")
+      }
+    }
+    if (!total) {
+      const headerAmount = line.match(/^\$?([\d,]+\.?\d*)\s*(?:USD|EUR|GBP|SAR|AED)\b/i)
+      if (headerAmount) {
+        total = headerAmount[1].replace(/,/g, "")
       }
     }
 
-    // Subtotal (use as fallback if no total found)
-    const subtotalMatch = line.match(
-      /subtotal\s*[$€£]?\s*([\d,]+\.?\d*)/i
-    )
-    if (subtotalMatch && !total) {
-      total = subtotalMatch[1].replace(/,/g, "")
-    }
-
-    // Tax
-    const taxMatch = line.match(
-      /(?:tax|vat|gst)\s*[$€£]?\s*([\d,]+\.?\d*)/i
-    )
-    if (taxMatch) {
-      tax = taxMatch[1].replace(/,/g, "")
-    }
-
-    // Line items: "Description Qty Unit price Amount" table rows
-    // Look for lines with a price at the end like "OpenRouter Credits 1 $52.97 $52.97"
-    const itemMatch = line.match(
-      /^(.+?)\s+(\d+)\s+[$€£]?([\d,]+\.?\d*)\s+[$€£]?([\d,]+\.?\d*)$/
-    )
-    if (itemMatch) {
-      const desc = itemMatch[1].trim()
-      // Skip header rows
-      if (
-        !/^(description|item|product|service)/i.test(desc) &&
-        !/qty|quantity|unit\s*price|amount/i.test(desc)
-      ) {
-        lineItems.push({
-          description: desc,
-          quantity: parseInt(itemMatch[2]) || 1,
-          unitPrice: itemMatch[3].replace(/,/g, ""),
-          total: itemMatch[4].replace(/,/g, ""),
-        })
-      }
+    // Tax from text
+    if (!tax) {
+      const taxMatch = line.match(
+        /(?:tax|vat|gst)\s*[$€£]?\s*([\d,]+\.?\d*)/i
+      )
+      if (taxMatch) tax = taxMatch[1].replace(/,/g, "")
     }
   }
 
@@ -249,24 +251,15 @@ function parseDate(str: string): string | null {
 }
 
 export async function extractInvoiceData(
-  imageBase64: string,
+  base64Data: string,
   mimeType: string = "image/png"
 ): Promise<OcrResult> {
   try {
-    await ensureModel()
+    const result = await ocrExtract(base64Data, mimeType)
 
-    // Use both text and table recognition for best results
-    const [textResult, tableResult] = await Promise.all([
-      ocrExtract(imageBase64, "Text Recognition:"),
-      ocrExtract(imageBase64, "Table Recognition:"),
-    ])
+    console.log("OCR Result:", result)
 
-    console.log("OCR Text Result:", textResult)
-    console.log("OCR Table Result:", tableResult)
-
-    // Combine both results - table recognition often captures line items better
-    const combined = `${textResult}\n${tableResult}`
-    return parseInvoiceText(combined)
+    return parseInvoiceText(result)
   } catch (error) {
     console.error("OCR extraction failed:", error)
     return { ...EMPTY_RESULT }

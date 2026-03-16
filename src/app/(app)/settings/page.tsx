@@ -28,18 +28,18 @@ export default async function SettingsPage() {
             <CardHeader>
               <CardTitle>OCR Settings</CardTitle>
               <CardDescription>
-                Configure the Ollama endpoint for invoice OCR processing.
+                Configure the HuggingFace API for invoice OCR processing.
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
                 <p className="text-sm text-muted-foreground">
-                  Ollama endpoint is configured via environment variables.
-                  Set <code className="text-xs bg-muted px-1 py-0.5 rounded">OLLAMA_BASE_URL</code> in
+                  OCR is powered by HuggingFace Inference API (GLM-OCR).
+                  Set <code className="text-xs bg-muted px-1 py-0.5 rounded">HF_TOKEN</code> in
                   your <code className="text-xs bg-muted px-1 py-0.5 rounded">.env.local</code> file.
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Default: <code className="bg-muted px-1 py-0.5 rounded">http://localhost:11434</code>
+                  Get a token at <code className="bg-muted px-1 py-0.5 rounded">huggingface.co/settings/tokens</code>
                 </p>
               </div>
             </CardContent>

@@ -41,11 +41,12 @@ export async function ensureBucket() {
   try {
     await s3Client.send(new HeadBucketCommand({ Bucket: BUCKET }))
   } catch (err: unknown) {
+    const errObj = err as unknown as Record<string, unknown>;
     const isNotFound =
       err instanceof Error &&
-      (("$metadata" in (err as Record<string, unknown>) &&
-        (err as Record<string, unknown> & { $metadata: { httpStatusCode?: number } }).$metadata?.httpStatusCode === 404) ||
-      (err as { name?: string }).name === "NotFound");
+      (("$metadata" in errObj &&
+        (errObj as { $metadata: { httpStatusCode?: number } }).$metadata?.httpStatusCode === 404) ||
+      (errObj as { name?: string }).name === "NotFound");
     if (!isNotFound) throw err;
     await s3Client.send(new CreateBucketCommand({ Bucket: BUCKET }))
     console.log(`Created S3 bucket: ${BUCKET}`)

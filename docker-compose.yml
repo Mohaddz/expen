@@ -15,8 +15,8 @@ services:
       - S3_SECRET_KEY=rustfsadmin123
       - S3_BUCKET=invoices
       - S3_REGION=us-east-1
-      - OLLAMA_BASE_URL=http://ollama:11434
-      - OCR_MODEL=glm-ocr:q8_0
+      - HF_TOKEN=${HF_TOKEN:-}
+      - HF_API_URL=${HF_API_URL:-}
     depends_on:
       postgres:
         condition: service_healthy

@@ -134,22 +134,15 @@ export function UploadZone({ categories }: { categories: Category[] }) {
       createdInvoiceId = invoice.id
       setInvoiceId(invoice.id)
 
-      // Convert file to a PNG image for OCR (PDFs need rendering first)
-      let imageBase64: string
-      let imageMime = "image/png"
-
-      if (f.type === "application/pdf") {
-        imageBase64 = await pdfToImageBase64(f)
-      } else {
-        const arrayBuffer = await f.arrayBuffer()
-        imageBase64 = btoa(
-          new Uint8Array(arrayBuffer).reduce(
-            (data, byte) => data + String.fromCharCode(byte),
-            ""
-          )
+      // Convert file to base64 for OCR (API supports both images and PDFs)
+      const arrayBuffer = await f.arrayBuffer()
+      const imageBase64 = btoa(
+        new Uint8Array(arrayBuffer).reduce(
+          (data, byte) => data + String.fromCharCode(byte),
+          ""
         )
-        imageMime = f.type
-      }
+      )
+      const imageMime = f.type
 
       const result = await processInvoiceOcr(invoice.id, imageBase64, imageMime)
       setOcrResult(result)
