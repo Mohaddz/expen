@@ -2,7 +2,7 @@
 
 import { useCallback, useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -12,6 +12,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import { Calendar } from "@/components/ui/calendar"
 import { createInvoice, processInvoiceOcr, createExpenseFromInvoice } from "@/actions/upload"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
@@ -21,7 +27,10 @@ import {
   Loader2,
   Check,
   AlertCircle,
+  CalendarIcon,
 } from "lucide-react"
+import { cn } from "@/lib/utils"
+import { format, parseISO } from "date-fns"
 import type { OcrResult } from "@/lib/ocr"
 
 interface Category {
@@ -255,7 +264,10 @@ export function UploadZone({ categories }: { categories: Category[] }) {
       )}
 
       {step === "review" && (
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className={cn(
+          "grid gap-6",
+          preview ? "md:grid-cols-2" : "mx-auto max-w-md"
+        )}>
           {preview && (
             <Card>
               <CardContent className="p-4">
@@ -268,138 +280,158 @@ export function UploadZone({ categories }: { categories: Category[] }) {
             </Card>
           )}
 
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold">Review Extracted Data</h3>
-
-            {ocrResult && (
-              <p className="text-xs text-muted-foreground flex items-center gap-1">
-                <Check className="h-3 w-3 text-green-500" />
-                OCR data extracted. Review and correct if needed.
-              </p>
-            )}
-
-            <div>
-              <Label>Title</Label>
-              <Input
-                value={formData.title}
-                onChange={(e) =>
-                  setFormData({ ...formData, title: e.target.value })
-                }
-                className="mt-1"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Review Extracted Data</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
               <div>
-                <Label>Amount</Label>
+                <Label>Title</Label>
                 <Input
-                  type="number"
-                  step="0.01"
-                  value={formData.amount}
+                  value={formData.title}
                   onChange={(e) =>
-                    setFormData({ ...formData, amount: e.target.value })
+                    setFormData({ ...formData, title: e.target.value })
                   }
-                  className="mt-1"
+                  className="mt-1.5"
                 />
               </div>
-              <div>
-                <Label>Currency</Label>
-                <Select
-                  value={formData.currency}
-                  onValueChange={(v) =>
-                    setFormData({ ...formData, currency: v })
-                  }
-                >
-                  <SelectTrigger className="mt-1">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="USD">USD</SelectItem>
-                    <SelectItem value="EUR">EUR</SelectItem>
-                    <SelectItem value="GBP">GBP</SelectItem>
-                    <SelectItem value="SAR">SAR</SelectItem>
-                    <SelectItem value="AED">AED</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
 
-            <div>
-              <Label>Date</Label>
-              <Input
-                type="date"
-                value={formData.date}
-                onChange={(e) =>
-                  setFormData({ ...formData, date: e.target.value })
-                }
-                className="mt-1"
-              />
-            </div>
-
-            <div>
-              <Label>Category</Label>
-              <Select
-                value={formData.categoryId}
-                onValueChange={(v) =>
-                  setFormData({ ...formData, categoryId: v })
-                }
-              >
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Select category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((cat) => (
-                    <SelectItem key={cat.id} value={cat.id}>
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="h-2 w-2 rounded-full"
-                          style={{ backgroundColor: cat.color }}
-                        />
-                        {cat.name}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {ocrResult?.lineItems && ocrResult.lineItems.length > 0 && (
-              <div>
-                <Label className="mb-2 block">Line Items</Label>
-                <div className="rounded-md border divide-y text-xs">
-                  {ocrResult.lineItems.map((item, i) => (
-                    <div key={i} className="flex items-center justify-between p-2">
-                      <span className="truncate flex-1">
-                        {item.description}
-                      </span>
-                      <span className="text-muted-foreground ml-2">
-                        x{item.quantity}
-                      </span>
-                      <span className="font-mono ml-2">${item.total}</span>
-                    </div>
-                  ))}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Amount</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={formData.amount}
+                    onChange={(e) =>
+                      setFormData({ ...formData, amount: e.target.value })
+                    }
+                    className="mt-1.5"
+                  />
+                </div>
+                <div>
+                  <Label>Currency</Label>
+                  <Select
+                    value={formData.currency}
+                    onValueChange={(v) =>
+                      setFormData({ ...formData, currency: v })
+                    }
+                  >
+                    <SelectTrigger className="mt-1.5 w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="USD">USD</SelectItem>
+                      <SelectItem value="EUR">EUR</SelectItem>
+                      <SelectItem value="GBP">GBP</SelectItem>
+                      <SelectItem value="SAR">SAR</SelectItem>
+                      <SelectItem value="AED">AED</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
-            )}
 
-            <div className="flex gap-3 pt-2">
-              <Button onClick={handleSave} disabled={saving}>
-                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Save as Expense
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setStep("upload")
-                  setFile(null)
-                  setPreview(null)
-                  setOcrResult(null)
-                }}
-              >
-                Start Over
-              </Button>
-            </div>
-          </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Date</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "mt-1.5 w-full justify-start text-left font-normal",
+                          !formData.date && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {formData.date
+                          ? format(parseISO(formData.date), "MMM d, yyyy")
+                          : "Pick a date"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={formData.date ? parseISO(formData.date) : undefined}
+                        onSelect={(date) => {
+                          if (date) {
+                            const y = date.getFullYear()
+                            const m = String(date.getMonth() + 1).padStart(2, "0")
+                            const d = String(date.getDate()).padStart(2, "0")
+                            setFormData({ ...formData, date: `${y}-${m}-${d}` })
+                          }
+                        }}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div>
+                  <Label>Category</Label>
+                  <Select
+                    value={formData.categoryId}
+                    onValueChange={(v) =>
+                      setFormData({ ...formData, categoryId: v })
+                    }
+                  >
+                    <SelectTrigger className="mt-1.5 w-full">
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map((cat) => (
+                        <SelectItem key={cat.id} value={cat.id}>
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="h-2 w-2 rounded-full"
+                              style={{ backgroundColor: cat.color }}
+                            />
+                            {cat.name}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {ocrResult?.lineItems && ocrResult.lineItems.length > 0 && (
+                <div>
+                  <Label className="mb-2 block">Line Items</Label>
+                  <div className="rounded-md border divide-y text-xs">
+                    {ocrResult.lineItems.map((item, i) => (
+                      <div key={i} className="flex items-center justify-between p-2">
+                        <span className="truncate flex-1">
+                          {item.description}
+                        </span>
+                        <span className="text-muted-foreground ml-2">
+                          x{item.quantity}
+                        </span>
+                        <span className="font-mono ml-2">${item.total}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <Button onClick={handleSave} disabled={saving} className="flex-1">
+                  {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Save as Expense
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setStep("upload")
+                    setFile(null)
+                    setPreview(null)
+                    setOcrResult(null)
+                  }}
+                >
+                  Start Over
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
 
