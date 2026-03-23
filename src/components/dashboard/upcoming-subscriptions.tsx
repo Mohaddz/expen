@@ -34,7 +34,7 @@ export function UpcomingSubscriptions({
           View all
         </Link>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex-1 min-h-0 overflow-y-auto">
         {subscriptions.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-4">
             No active subscriptions.

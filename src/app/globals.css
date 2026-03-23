@@ -150,3 +150,32 @@
     overflow: hidden;
   }
 }
+
+/* react-grid-layout overrides */
+.react-grid-placeholder {
+  background: oklch(0.5 0.02 260 / 20%) !important;
+  border: 2px dashed oklch(0.5 0.02 260 / 40%) !important;
+  border-radius: var(--radius) !important;
+  opacity: 1 !important;
+}
+
+.react-resizable-handle {
+  background: none !important;
+}
+
+.react-resizable-handle::after {
+  border-color: oklch(0.5 0 0 / 40%) !important;
+  width: 8px !important;
+  height: 8px !important;
+}
+
+.react-grid-item.react-draggable-dragging {
+  z-index: 50;
+  opacity: 0.9;
+  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1);
+}
+
+.react-grid-item > .react-resizable-handle::after {
+  right: 4px !important;
+  bottom: 4px !important;
+}

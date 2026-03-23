@@ -52,10 +52,10 @@ export function CategoryChart({ data }: CategoryChartProps) {
           Spending by Category
         </CardTitle>
       </CardHeader>
-      <CardContent className="pb-3">
+      <CardContent className="pb-3 flex-1 min-h-0">
         <ChartContainer
           config={chartConfig}
-          className="mx-auto h-[280px] w-full"
+          className="mx-auto h-full w-full"
         >
           <RadarChart data={topCategories} outerRadius="70%" cx="50%" cy="50%">
             <ChartTooltip

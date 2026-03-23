@@ -131,13 +131,29 @@ export const subscriptions = pgTable("subscriptions", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 })
 
+export const dashboardLayouts = pgTable("dashboard_layouts", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .unique()
+    .references(() => user.id, { onDelete: "cascade" }),
+  layout: jsonb("layout").notNull(),
+  hiddenWidgets: jsonb("hidden_widgets").notNull().default([]),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+})
+
 // ── Relations ───────────────────────────────────────────────────────────────
 
-export const userRelations = relations(user, ({ many }) => ({
+export const userRelations = relations(user, ({ many, one }) => ({
   expenses: many(expenses),
   categories: many(categories),
   invoices: many(invoices),
   subscriptions: many(subscriptions),
+  dashboardLayout: one(dashboardLayouts),
+}))
+
+export const dashboardLayoutRelations = relations(dashboardLayouts, ({ one }) => ({
+  user: one(user, { fields: [dashboardLayouts.userId], references: [user.id] }),
 }))
 
 export const categoryRelations = relations(categories, ({ one, many }) => ({

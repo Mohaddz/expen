@@ -28,7 +28,7 @@ export function RecentExpenses({ expenses }: RecentExpensesProps) {
           View all
         </Link>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex-1 min-h-0 overflow-y-auto">
         {expenses.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-4">
             No expenses yet.

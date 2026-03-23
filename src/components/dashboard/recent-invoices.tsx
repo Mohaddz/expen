@@ -29,7 +29,7 @@ export function RecentInvoices({ invoices }: RecentInvoicesProps) {
           Upload
         </Link>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex-1 min-h-0 overflow-y-auto">
         <div className="space-y-2.5">
           {invoices.map((invoice) => (
             <div

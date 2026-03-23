@@ -94,8 +94,8 @@ export function SpendingChart({ monthlyData, weeklyData, yearlyData }: SpendingC
           ))}
         </div>
       </CardHeader>
-      <CardContent className="pb-2">
-        <ChartContainer config={chartConfig} className="h-[220px] w-full">
+      <CardContent className="pb-2 flex-1 min-h-0">
+        <ChartContainer config={chartConfig} className="h-full w-full">
           <BarChart accessibilityLayer data={data}>
             <CartesianGrid vertical={false} />
             <XAxis
