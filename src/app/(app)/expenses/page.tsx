@@ -1,10 +1,8 @@
 import { AppHeader } from "@/components/layout/app-header"
-import { Button } from "@/components/ui/button"
-import { Plus } from "lucide-react"
-import Link from "next/link"
 import { getExpenses } from "@/actions/expenses"
 import { getCategories, seedDefaultCategories } from "@/actions/categories"
 import { ExpensesDataTable } from "@/components/expenses/expenses-data-table"
+import { CreateExpenseDialog } from "@/components/expenses/create-expense-dialog"
 import type { Option } from "@/types/data-table"
 
 export default async function ExpensesPage() {
@@ -24,12 +22,7 @@ export default async function ExpensesPage() {
   return (
     <div className="absolute inset-0 flex flex-col">
       <AppHeader title="Expenses">
-        <Button asChild size="sm" className="h-8">
-          <Link href="/expenses/new">
-            <Plus className="mr-1 h-3.5 w-3.5" />
-            New
-          </Link>
-        </Button>
+        <CreateExpenseDialog categories={categories} />
       </AppHeader>
       <div className="min-h-0 flex-1">
         <ExpensesDataTable

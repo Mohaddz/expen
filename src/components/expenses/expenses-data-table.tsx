@@ -40,9 +40,9 @@ export function ExpensesDataTable({
   const [loading, setLoading] = React.useState(false)
   const [hasMore, setHasMore] = React.useState(initialData.length >= PAGE_SIZE)
   const sentinelRef = React.useRef<HTMLDivElement>(null)
-  const mountedRef = React.useRef(false)
-  const isFirstRender = React.useRef(true)
-  React.useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false } }, [])
+  const mountedRef = React.useRef(true)
+  const prevInitialDataRef = React.useRef(initialData)
+  React.useEffect(() => { return () => { mountedRef.current = false } }, [])
 
   const [sorting, setSorting] = React.useState<SortingState>([
     { id: "date", desc: true },
@@ -55,7 +55,7 @@ export function ExpensesDataTable({
   const [rowSelection, setRowSelection] = React.useState({})
 
   const loadMore = React.useCallback(async () => {
-    if (loading || !hasMore) return
+    if (!mountedRef.current || loading || !hasMore) return
     setLoading(true)
     try {
       const { data: nextData } = await getExpenses({
@@ -84,10 +84,8 @@ export function ExpensesDataTable({
   }, [loadMore, hasMore])
 
   React.useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false
-      return
-    }
+    if (prevInitialDataRef.current === initialData) return
+    prevInitialDataRef.current = initialData
     setData(initialData)
     setHasMore(initialData.length >= PAGE_SIZE)
   }, [initialData])
