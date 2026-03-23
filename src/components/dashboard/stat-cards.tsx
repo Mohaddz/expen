@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { DollarSign, TrendingUp, RefreshCw, Receipt } from "lucide-react"
+import { DollarSign, TrendingUp, TrendingDown, RefreshCw, Receipt } from "lucide-react"
 
 interface StatCardsProps {
   totalSpend: number
@@ -7,6 +7,34 @@ interface StatCardsProps {
   monthlyCount: number
   subscriptionMonthly: number
   activeSubscriptions: number
+  lastMonthSpend?: number
+}
+
+function TrendBadge({ current, previous }: { current: number; previous: number }) {
+  if (previous === 0) return null
+
+  const pct = ((current - previous) / previous) * 100
+  const isUp = pct > 0
+  const isNeutral = pct === 0
+
+  if (isNeutral) return null
+
+  return (
+    <span
+      className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+        isUp
+          ? "bg-red-500/10 text-red-500"
+          : "bg-green-500/10 text-green-500"
+      }`}
+    >
+      {isUp ? (
+        <TrendingUp className="h-2.5 w-2.5" />
+      ) : (
+        <TrendingDown className="h-2.5 w-2.5" />
+      )}
+      {Math.abs(pct).toFixed(0)}%
+    </span>
+  )
 }
 
 export function StatCards({
@@ -15,6 +43,7 @@ export function StatCards({
   monthlyCount,
   subscriptionMonthly,
   activeSubscriptions,
+  lastMonthSpend,
 }: StatCardsProps) {
   const cards = [
     {
@@ -25,6 +54,7 @@ export function StatCards({
       }),
       icon: DollarSign,
       description: "All time",
+      trend: null as React.ReactNode,
     },
     {
       title: "This Month",
@@ -34,6 +64,10 @@ export function StatCards({
       }),
       icon: TrendingUp,
       description: `${monthlyCount} expense${monthlyCount !== 1 ? "s" : ""}`,
+      trend:
+        lastMonthSpend != null ? (
+          <TrendBadge current={monthlySpend} previous={lastMonthSpend} />
+        ) : null,
     },
     {
       title: "Subscriptions",
@@ -43,6 +77,7 @@ export function StatCards({
       }),
       icon: RefreshCw,
       description: `${activeSubscriptions} active / month`,
+      trend: null as React.ReactNode,
     },
     {
       title: "Monthly Total",
@@ -52,6 +87,13 @@ export function StatCards({
       }),
       icon: Receipt,
       description: "Expenses + subs",
+      trend:
+        lastMonthSpend != null ? (
+          <TrendBadge
+            current={monthlySpend + subscriptionMonthly}
+            previous={lastMonthSpend + subscriptionMonthly}
+          />
+        ) : null,
     },
   ]
 
@@ -66,7 +108,10 @@ export function StatCards({
             <card.icon className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{card.value}</div>
+            <div className="flex items-center gap-2">
+              <div className="text-2xl font-bold">{card.value}</div>
+              {card.trend}
+            </div>
             <p className="text-xs text-muted-foreground mt-1">
               {card.description}
             </p>

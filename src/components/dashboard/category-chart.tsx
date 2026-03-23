@@ -1,17 +1,29 @@
 "use client"
 
+import { PolarAngleAxis, PolarGrid, Radar, RadarChart } from "recharts"
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart"
-import { Pie, PieChart, Cell } from "recharts"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 interface CategoryChartProps {
   data: { name: string; color: string; total: number; count: number }[]
 }
+
+const chartConfig = {
+  total: {
+    label: "Spending",
+    color: "var(--chart-1)",
+  },
+} satisfies ChartConfig
 
 export function CategoryChart({ data }: CategoryChartProps) {
   if (data.length === 0) {
@@ -31,62 +43,37 @@ export function CategoryChart({ data }: CategoryChartProps) {
     )
   }
 
-  const chartConfig = Object.fromEntries(
-    data.map((d) => [
-      d.name,
-      { label: d.name, color: d.color },
-    ])
-  ) satisfies ChartConfig
+  const topCategories = data.slice(0, 8)
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="pb-2">
         <CardTitle className="text-sm font-medium">
           Spending by Category
         </CardTitle>
       </CardHeader>
-      <CardContent>
-        <div className="flex items-center gap-6">
-          <ChartContainer config={chartConfig} className="h-[200px] w-[200px]">
-            <PieChart>
-              <ChartTooltip content={<ChartTooltipContent />} />
-              <Pie
-                data={data}
-                dataKey="total"
-                nameKey="name"
-                innerRadius={50}
-                outerRadius={80}
-                strokeWidth={2}
-              >
-                {data.map((entry) => (
-                  <Cell key={entry.name} fill={entry.color} />
-                ))}
-              </Pie>
-            </PieChart>
-          </ChartContainer>
-
-          <div className="flex flex-col gap-1.5 flex-1">
-            {data.slice(0, 6).map((item) => (
-              <div
-                key={item.name}
-                className="flex items-center justify-between text-xs"
-              >
-                <div className="flex items-center gap-2">
-                  <div
-                    className="h-2 w-2 rounded-full"
-                    style={{ backgroundColor: item.color }}
-                  />
-                  <span className="text-muted-foreground truncate max-w-[120px]">
-                    {item.name}
-                  </span>
-                </div>
-                <span className="font-mono font-medium">
-                  ${item.total.toFixed(0)}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
+      <CardContent className="pb-3 flex-1 min-h-0">
+        <ChartContainer
+          config={chartConfig}
+          className="mx-auto h-full w-full"
+        >
+          <RadarChart data={topCategories} outerRadius="70%" cx="50%" cy="50%">
+            <ChartTooltip
+              cursor={false}
+              content={<ChartTooltipContent />}
+            />
+            <PolarAngleAxis
+              dataKey="name"
+              tick={{ fontSize: 11 }}
+            />
+            <PolarGrid />
+            <Radar
+              dataKey="total"
+              fill="var(--color-total)"
+              fillOpacity={0.6}
+            />
+          </RadarChart>
+        </ChartContainer>
       </CardContent>
     </Card>
   )
