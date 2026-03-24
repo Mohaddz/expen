@@ -31,6 +31,20 @@ export const categorySchema = z.object({
   icon: z.string().min(1),
 })
 
+export const userPreferencesSchema = z.object({
+  currency: z.enum(["SAR", "USD", "EUR", "GBP", "AED"]),
+  dateFormat: z.enum(["yyyy-MM-dd", "MM/dd/yyyy", "dd/MM/yyyy", "dd-MM-yyyy"]),
+  defaultCategoryId: z.string().uuid().optional().nullable(),
+  emailNotifications: z.boolean(),
+  weeklyReport: z.boolean(),
+})
+
+export const customServiceSchema = z.object({
+  name: z.string().min(1, "Name is required").max(100),
+})
+
 export type ExpenseFormData = z.infer<typeof expenseSchema>
 export type SubscriptionFormData = z.infer<typeof subscriptionSchema>
 export type CategoryFormData = z.infer<typeof categorySchema>
+export type UserPreferencesFormData = z.infer<typeof userPreferencesSchema>
+export type CustomServiceFormData = z.infer<typeof customServiceSchema>

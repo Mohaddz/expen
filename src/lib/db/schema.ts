@@ -142,6 +142,35 @@ export const dashboardLayouts = pgTable("dashboard_layouts", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 })
 
+export const userPreferences = pgTable("user_preferences", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .unique()
+    .references(() => user.id, { onDelete: "cascade" }),
+  currency: text("currency").notNull().default("SAR"),
+  dateFormat: text("date_format").notNull().default("yyyy-MM-dd"),
+  defaultCategoryId: uuid("default_category_id").references(
+    () => categories.id,
+    { onDelete: "set null" }
+  ),
+  emailNotifications: boolean("email_notifications").notNull().default(true),
+  weeklyReport: boolean("weekly_report").notNull().default(false),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+})
+
+export const customSubscriptionServices = pgTable(
+  "custom_subscription_services",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  }
+)
+
 // ── Relations ───────────────────────────────────────────────────────────────
 
 export const userRelations = relations(user, ({ many, one }) => ({
@@ -150,6 +179,8 @@ export const userRelations = relations(user, ({ many, one }) => ({
   invoices: many(invoices),
   subscriptions: many(subscriptions),
   dashboardLayout: one(dashboardLayouts),
+  preferences: one(userPreferences),
+  customServices: many(customSubscriptionServices),
 }))
 
 export const dashboardLayoutRelations = relations(dashboardLayouts, ({ one }) => ({
@@ -189,3 +220,20 @@ export const subscriptionRelations = relations(subscriptions, ({ one }) => ({
     references: [categories.id],
   }),
 }))
+
+export const userPreferencesRelations = relations(userPreferences, ({ one }) => ({
+  user: one(user, {
+    fields: [userPreferences.userId],
+    references: [user.id],
+  }),
+}))
+
+export const customSubscriptionServicesRelations = relations(
+  customSubscriptionServices,
+  ({ one }) => ({
+    user: one(user, {
+      fields: [customSubscriptionServices.userId],
+      references: [user.id],
+    }),
+  })
+)
