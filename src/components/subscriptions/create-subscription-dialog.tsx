@@ -35,6 +35,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { createSubscription } from "@/actions/subscriptions"
+import { createCustomService } from "@/actions/custom-services"
 import { toast } from "sonner"
 import { Loader2, Plus, Building2 } from "lucide-react"
 import {
@@ -42,27 +43,9 @@ import {
   type SubscriptionCompany,
 } from "@/lib/subscription-companies"
 
-const CUSTOM_NAMES_KEY = "budget-custom-subscription-names"
-
 const builtInNames = new Set(
   SUBSCRIPTION_COMPANIES.map((c) => c.name.toLowerCase())
 )
-
-function getCustomNames(): string[] {
-  try {
-    return JSON.parse(localStorage.getItem(CUSTOM_NAMES_KEY) || "[]")
-  } catch {
-    return []
-  }
-}
-
-function saveCustomName(name: string) {
-  const names = getCustomNames()
-  if (!names.includes(name)) {
-    names.push(name)
-    localStorage.setItem(CUSTOM_NAMES_KEY, JSON.stringify(names))
-  }
-}
 
 const getDefaultValues = (): SubscriptionFormData => ({
   name: "",
@@ -77,6 +60,7 @@ const getDefaultValues = (): SubscriptionFormData => ({
 
 interface CreateSubscriptionDialogProps {
   categories: { id: string; name: string; color: string }[]
+  customServices: { id: string; name: string }[]
 }
 
 function ServiceLogo({ src }: { src: string }) {
@@ -96,11 +80,16 @@ function ServiceLogo({ src }: { src: string }) {
 
 export function CreateSubscriptionDialog({
   categories,
+  customServices,
 }: CreateSubscriptionDialogProps) {
   const [open, setOpen] = React.useState(false)
   const [serviceOpen, setServiceOpen] = React.useState(false)
   const [search, setSearch] = React.useState("")
-  const [customNames, setCustomNames] = React.useState<string[]>([])
+
+  const customNames = React.useMemo(
+    () => customServices.map((s) => s.name),
+    [customServices]
+  )
 
   const form = useForm<SubscriptionFormData>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -111,7 +100,6 @@ export function CreateSubscriptionDialog({
   React.useEffect(() => {
     if (open) {
       setSearch("")
-      setCustomNames(getCustomNames())
       form.reset(getDefaultValues())
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -165,15 +153,14 @@ export function CreateSubscriptionDialog({
   function handleCreateCustom() {
     const name = search.trim()
     if (!name) return
-    saveCustomName(name)
-    setCustomNames(getCustomNames())
+    createCustomService({ name }).catch(() => {})
     setServiceOpen(false)
     form.setValue("name", name)
   }
 
   async function onSubmit(data: SubscriptionFormData) {
     if (!builtInNames.has(data.name.toLowerCase())) {
-      saveCustomName(data.name)
+      createCustomService({ name: data.name }).catch(() => {})
     }
     setServiceOpen(false)
     setSearch("")
